@@ -19,7 +19,7 @@ npx skills add free5gc/agent-skills --skill free5gc-deploy -g -a claude-code
 
 Open or restart the agent in the installation scope and ask:
 
-> 請透過 free5gc-deploy 幫我安裝 free5gc
+> Please use free5gc-deploy to install free5GC.
 
 The agent needs shell access to the target Ubuntu host, sudo permission, and
 Internet access. A fresh host means no free5GC dependencies are preinstalled;
