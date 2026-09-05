@@ -1,0 +1,4 @@
+interface:
+  display_name: "free5GC Deploy"
+  short_description: "Install free5GC and verify TestRegistration"
+  default_prompt: "Use $free5gc-deploy to install free5GC, pass TestRegistration, remove the test subscriber, and open Webconsole."
