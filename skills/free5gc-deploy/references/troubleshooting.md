@@ -6,6 +6,10 @@ replace an upstream integration test with a weaker test to obtain success.
 
 | Symptom | Investigation and bounded repair |
 | --- | --- |
+| Stops after the control plane and hands off `privilege.sh` | Inspect the actual sudo/sandbox failure and follow `privileges.md`. Resolve access first, then have the agent execute the remaining authorized stages and verify completion. The script's existence is not a successful deployment. |
+| sudo requests a password / no terminal available | Complete the one-time preparation in `privileges.md`; if password input is unavailable, the owner runs only the initial lease helper in their terminal, then the agent verifies fresh-terminal access and continues. Do not capture the password or assume another terminal's credential is shared. |
+| Lease expires / cleanup timer fails | Stop new privileged stages; inspect the recorded expiry and unit. Clean up owned resources and revoke through normal administrator access. Do not silently renew the lease or treat `NOTAFTER` as removal of its per-user Defaults. |
+| sudo blocked by sandbox / no new privileges | Use the agent's normal approval/escalation mechanism for host execution. Changing a sudo password or generating another shell script does not resolve the sandbox boundary. |
 | apt/dpkg lock | Identify the owner (`ps`, `fuser`, systemd apt timers). Allow an active update to finish with bounded checks. Do not delete lock files or kill a healthy package operation. |
 | Interrupted dpkg / unmet dependencies | Check `dpkg --audit`, disk space, and package errors. After locks clear, use `dpkg --configure -a` or an inspected `apt-get --fix-broken install` plan. Review removals before applying. |
 | Ubuntu archive 404 | Verify actual suite and current archive status; follow `single-host.md` for EOL archive URIs, preserving suite and signatures. |

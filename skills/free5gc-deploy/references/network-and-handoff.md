@@ -76,22 +76,43 @@ if no specific target is known. Do not invent an already-passed ping.
 These checks prepare data-plane configuration; actual packet forwarding is
 verified later by the user's simulator test.
 
-## Start persistently and check readiness
+## Start directly and check readiness
 
-Use the selected release's `./run.sh` from the checkout and `./bin/webconsole`
-from its Webconsole directory. Use dedicated persistent sessions or service
-units, not an untracked background process tied to a short-lived tool shell.
-Read how `run.sh` starts privileged UPF processes and handles signals. Arrange
-privileges within the user's existing authorization and record working paths,
-owned session/process IDs, logs, and exact stop/restart commands. Do not make
-all builds or Webconsole run as root merely because UPF needs privileges.
+Run the core from the free5GC checkout in the verified privileged-capable
+terminal described in [privileges.md](privileges.md):
 
-A practical default on fresh Ubuntu is dedicated tmux sessions, installed as a
-dependency if selected. Start commands with the explicit Go/tool PATH if needed;
-ensure sudo can actually authenticate in the core session. Reuse existing owned
-healthy sessions on resume. Verify their child NFs, not just the tmux session.
-If using service units instead, ensure child processes are managed as a group.
-Do not promise reboot autostart unless it is configured and checked.
+```bash
+cd "$F5GC_ROOT"
+./run.sh
+```
+
+In a second agent-managed terminal, run Webconsole as the deployment user:
+
+```bash
+cd "$F5GC_ROOT/webconsole"
+go run server.go
+```
+
+Set the selected Go toolchain on PATH in that terminal. Keep the built frontend
+assets available; `go run server.go` starts the backend and does not replace the
+frontend build. Do not install/use tmux or create service units for these two
+processes. System services such as MongoDB retain their normal service handling.
+
+Keep both commands alive while checking readiness and handing off the URL. Use
+the agent's long-running terminal support and retain its session identifiers.
+The intended flow is ordinary core/server execution, not a new process-management
+framework. If tool terminals are torn down when the task ends, use plain
+`nohup` with redirected stdin/output and recorded process IDs for the same
+commands, keeping the Webconsole invocation as `go run server.go`. Before any
+detached core launch, verify its sudo commands can run in that detached context;
+a foreground terminal's cached password may not be available there.
+
+Record owned process/session IDs, working directories, logs and stop/restart
+commands. `go run` has a launcher and a server child: track both, and verify the
+actual listener when stopping or restarting. Read `run.sh`'s signal behavior
+and terminate its owned children as required, without global process-name kills.
+Reuse healthy owned processes on resume. Do not report deployment complete if
+either command exited with its launching tool, and do not promise reboot autostart.
 
 Use bounded readiness checks rather than fixed sleeps alone:
 
@@ -104,6 +125,12 @@ Use bounded readiness checks rather than fixed sleeps alone:
 - Startup logs contain no unresolved fatal configuration or bind error.
 - Webconsole serves its login page and frontend assets at the intended URL.
   A process, open port, or unrelated HTTP 200 is insufficient.
+
+After readiness succeeds, revoke the temporary sudo lease (if one was created)
+using [privileges.md](privileges.md), verify its removal, then repeat readiness
+checks. Leave the final Core and Webconsole running. Stop/restart instructions
+must account for normal sudo authentication being restored, including privileged
+cleanup in the selected `run.sh` signal handler.
 
 ## Browser and next steps
 

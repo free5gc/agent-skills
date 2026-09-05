@@ -2,10 +2,11 @@
 
 ## Environment and source
 
-Inspect `/etc/os-release`, `uname -r`, architecture, CPU flags, RAM/disk, default
-routes, addresses, existing listeners, and systemd. Check sudo availability via
-`sudo -n true`; obtain credentials through the normal terminal flow if needed,
-never through chat. Source/build files belong to the deployment user.
+Resolve the execution path in [privileges.md](privileges.md) before installing
+anything. Inspect `/etc/os-release`, `uname -r`, architecture, CPU flags,
+RAM/disk, default routes, addresses, existing listeners, and systemd.
+Source/build files belong to the deployment user. Installing into `/usr/local`
+needs elevated access; compiling Go code does not inherently require root.
 
 Check CPU requirements of the selected MongoDB version (including AVX for
 recent x86_64 versions), running-kernel headers, module loading/Secure Boot,
@@ -71,7 +72,9 @@ cannot work, or successful compilation as proof the module loaded.
 
 Execute stages separately, checking exit status and actual postconditions.
 Use `quick-setup.sh` as a reference; do not source the entire script as the sole
-installation action.
+installation action. Execute required privileged stages through the verified
+agent terminal/approval path; do not stop at the control plane and delegate the
+rest to a user-run script.
 
 1. **System/build tools.** Install packages actually required by the checkout,
    normally `git ca-certificates curl wget gnupg build-essential cmake autoconf

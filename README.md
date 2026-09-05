@@ -25,15 +25,40 @@ The agent needs shell access to the target Ubuntu host, sudo permission, and
 Internet access. A fresh host means no free5GC dependencies are preinstalled;
 the agent and Node.js/npm used to install the skill are bootstrap prerequisites.
 
+The agent prepares privileges once before installing components. It reuses
+adequate existing passwordless sudo, or asks you to authorize a temporary sudo
+lease for the deployment account on your dedicated VM. The lease grants
+unrestricted root sudo for 120 minutes by default, supports separate agent
+terminals, and is removed after completion or failure. An expiry rule and a
+persistent cleanup timer cover an interrupted agent session.
+
+If Ubuntu requires a password, enter it once in a supported terminal during
+preparation. If the agent cannot accept terminal input, it supplies one concrete
+bootstrap command for you to run; it then verifies access and automatically
+continues installation, testing, cleanup, and startup. It should not stop after
+the control plane and hand you a `privilege.sh` to finish deployment yourself.
+
+Agent command approvals and Ubuntu sudo authentication are separate. Choose an
+agent policy permitting host installation during preparation; a skill cannot
+bypass remaining approval requirements. A lease that expires before completion
+requires a new authorized window. For unattended evaluation, provision adequate
+sudo access in the VM image. See the
+[privilege workflow](skills/free5gc-deploy/references/privileges.md).
+
 ## Workflow
 
-1. Inspect Ubuntu, kernel, network, and existing installation state.
+1. Prepare permissions once; inspect Ubuntu, kernel, network, and existing state.
 2. Install dependencies, build free5GC/Webconsole, and troubleshoot failures.
 3. Run the built-in `TestRegistration` and verify its actual result.
 4. Remove the test subscriber and check for leftover test resources.
 5. Configure the final core's N2/N3/N6 networking and DNN settings.
-6. Start the core and Webconsole, open the page when a browser is available,
-   and provide login, simulator configuration, and next-step instructions.
+6. Start the core with `./run.sh` and Webconsole with `go run server.go` in their
+   respective directories, open the page when a browser is available,
+   revoke temporary sudo access, and provide login, simulator configuration,
+   and next-step instructions.
+
+The agent keeps both processes running without tmux. Webconsole's frontend is
+built during installation; `go run server.go` starts its backend.
 
 You then create a subscriber and install/configure a RAN/UE simulator to test
 connectivity and ping through the intended DNN. The skill does not install a
@@ -55,11 +80,14 @@ npx skills add . --list
 python3 -m unittest discover -s tests -v
 ```
 
-The helper tests run without installing packages, loading modules, or starting
-free5GC. They require Python 3 and PyYAML (`python3-yaml` with the system Python).
-Local CLI discovery, skill structure validation, and the seven helper tests
-have passed. Fresh-VM testing is left to the maintainer; do not run deployment tests
-on an already configured development host.
+The helper tests run without installing packages, changing sudoers/systemd,
+loading modules, or starting free5GC. They require Python 3 and PyYAML
+(`python3-yaml` with the system Python).
+Privilege helper tests use temporary directories and simulated system commands;
+they do not certify live sudo authentication or timer execution. Skill structure
+validation and helper regression tests are available locally. Fresh-VM testing
+is left to the maintainer; do not run deployment tests on an already configured
+development host.
 
 For each target OS, use a fresh VM snapshot and record:
 
@@ -71,6 +99,7 @@ For each target OS, use a fresh VM snapshot and record:
 | Handoff | Core readiness, Webconsole login page, configuration summary |
 | Maintainer's simulator test | Registration/session result and actual DNN ping |
 | Recovery | Resume after apt/test failure; no duplicate rules or processes |
+| Privileges | Fresh-terminal sudo and sudo -v; early revoke; expiry/reboot cleanup; existing policy preserved |
 
 Evaluate skill discovery and execution in both Codex and Claude Code. No
 fresh-VM deployment or simulator ping has been certified by this repository yet.

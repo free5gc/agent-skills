@@ -26,6 +26,14 @@ agent-specific MCP server, browser automation, or other skill is required.
   test, and startup steps within the agent's permissions. Continue through
   recoverable failures; ask only for missing access, consequential choices, or
   actions outside that scope. Do not ask for approval at every stage.
+- Complete one-time privilege preparation before installing components:
+  follow [privileges.md](references/privileges.md). Execute required sudo steps
+  through the agent's approved tools. Reuse adequate existing access, or prepare
+  an explicitly authorized, time-limited sudo lease with automatic cleanup.
+  Do not finish after building only the control plane or hand the remaining
+  installation to the user as `privilege.sh`.
+  If access is blocked, report the exact permission failure and resume after
+  it is resolved; a generated script is not a completed deployment.
 - Read the selected checkout's scripts before execution. Use `quick-setup.sh`
   as a dependency reference; execute and verify its stages separately so an apt
   error cannot be hidden by a later success message.
@@ -40,7 +48,9 @@ agent-specific MCP server, browser automation, or other skill is required.
 
 ## Workflow
 
-1. **Inspect, install, build.** Follow [single-host.md](references/single-host.md).
+1. **Check access, inspect, install, build.** Resolve
+   [privileges.md](references/privileges.md) first, then follow
+   [single-host.md](references/single-host.md).
    Record host, checkout, versions, relevant network settings, and successful
    stages in a private deployment directory outside the skill.
 2. **Test before starting the final core.** Read
@@ -56,8 +66,12 @@ agent-specific MCP server, browser automation, or other skill is required.
 4. **Configure, start, and hand off.** After PASS and cleanup, follow
    [network-and-handoff.md](references/network-and-handoff.md). Check DNN/pool
    consistency, N2/N3 addresses, N6 routing/forwarding/NAT, then start the final
-   core and Webconsole persistently. Verify readiness and open the login page,
-   or provide a reachable URL and remote access instructions on a headless host.
+   core with `./run.sh` and Webconsole with `go run server.go` in their respective
+   working directories. Keep both running without tmux. Verify readiness and
+   open the login page, or provide a reachable URL and remote access instructions
+   on a headless host. Revoke any lease created for this deployment and recheck
+   readiness before handoff. On failure, clean up owned resources and revoke
+   the lease before returning; the expiry timer covers an unexpected interruption.
 
 When a stage fails, read the relevant entry in
 [troubleshooting.md](references/troubleshooting.md), inspect evidence, repair the
@@ -68,7 +82,8 @@ convert an unresolved failure into a success claim.
 ## Completion
 
 Report success only after TestRegistration passes, subscriber cleanup is
-verified, and the configured final core and Webconsole are running. Provide:
+verified, the configured final core and Webconsole are running, and any temporary
+sudo lease created by this deployment has been removed. Provide:
 
 - free5GC version/commit and install directory;
 - `TestRegistration: PASS`, the fresh test log, and cleanup result;
@@ -76,6 +91,7 @@ verified, and the configured final core and Webconsole are running. Provide:
 - actual PLMN, TAC, S-NSSAI, DNN, UE pool, AMF N2 and UPF N3 addresses/ports,
   and N6 interface/route for the user's simulator setup;
 - process stop/restart commands, logs, and any reboot/persistence limitations;
+- temporary privilege cleanup result, or confirmation that existing access was reused;
 - next steps: **create a subscriber**, then **install/configure a RAN/UE
   simulator and test DNN connectivity**, with the official documentation links.
 

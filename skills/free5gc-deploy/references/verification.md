@@ -13,8 +13,10 @@ ownership before the run. In the inspected checkout these include `UPFns`,
 Verify the selected script rather than hard-coding these as universal values.
 Apply any test-required forwarding/module settings documented by that release,
 recording prior values and separating temporary test changes from the final
-network configuration. Confirm sudo credentials are usable before the bounded
-noninteractive test; a hidden password prompt must not consume its deadline.
+network configuration. Use the privileged execution context verified in
+[privileges.md](privileges.md), and recheck it before the bounded test; a hidden
+password prompt must not consume its deadline. Do not assume authentication in
+a separate terminal carries over into this test shell.
 
 Derive the test SUPI, PLMN, database URI/name, and collection/filter list from
 the test's provisioning helpers. The inspected TestRegistration uses
