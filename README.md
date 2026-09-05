@@ -4,20 +4,20 @@ Skills for agents with Linux shell access, including Codex and Claude Code.
 
 ## Install
 
-請先準備 Node.js/npm，並確認已安裝可使用的 agent：
+With Node.js/npm and an agent already available:
 
 ```bash
 npx skills add free5gc/agent-skills --skill free5gc-deploy
 ```
 
-請在安裝程式中選擇要使用的 agent。若要全域安裝：
+Choose your agent in the installer. For a global installation:
 
 ```bash
 npx skills add free5gc/agent-skills --skill free5gc-deploy -g -a codex
 npx skills add free5gc/agent-skills --skill free5gc-deploy -g -a claude-code
 ```
 
-請在 skill 的安裝範圍內開啟或重新啟動 agent，並輸入：
+Open or restart the agent in the installation scope and ask:
 
 > 請透過 free5gc-deploy 幫我安裝 free5gc
 
