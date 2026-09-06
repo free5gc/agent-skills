@@ -126,6 +126,54 @@ class LeaseTests(unittest.TestCase):
                 self.assert_rolled_back()
         self.assertEqual(self.calls, [])
 
+    def test_inspects_active_existing_lease_without_mutation(self):
+        self.install()
+        before = {key: self.path(key).read_bytes() for key in ("rule", "service", "timer")}
+        states = []
+
+        result = PRIV.inspect_existing(
+            "deploy", 1234, root=self.root,
+            now=datetime(2030, 1, 1, 1, 30, tzinfo=timezone.utc),
+            owner_uid=os.getuid(), state_reader=lambda unit: states.append(unit) or "active",
+        )
+
+        self.assertEqual(result["status"], "ACTIVE")
+        self.assertEqual(result["remaining_seconds"], 30 * 60)
+        self.assertTrue(result["artifacts_verified"])
+        self.assertEqual(states, [self.plan["unit"]])
+        self.assertEqual(before,
+                         {key: self.path(key).read_bytes()
+                          for key in ("rule", "service", "timer")})
+        self.assertEqual(self.existing.read_text(), "preexisting host policy\n")
+
+    def test_inspection_reports_expiry_and_inactive_timer(self):
+        self.install()
+        common = {"root": self.root, "owner_uid": os.getuid()}
+        result = PRIV.inspect_existing(
+            "deploy", 1234, now=datetime(2030, 1, 1, 2, 1, tzinfo=timezone.utc),
+            state_reader=lambda unit: "inactive", **common,
+        )
+        self.assertEqual(result["status"], "EXPIRED")
+        self.assertEqual(result["remaining_seconds"], 0)
+
+        result = PRIV.inspect_existing(
+            "deploy", 1234, now=datetime(2030, 1, 1, 1, tzinfo=timezone.utc),
+            state_reader=lambda unit: "inactive", **common,
+        )
+        self.assertEqual(result["status"], "TIMER_INACTIVE")
+
+    def test_inspection_rejects_tampered_or_untrusted_artifacts(self):
+        self.install()
+        self.path("service").write_text(self.plan["service_text"] + "# changed\n")
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            PRIV.inspect_existing("deploy", 1234, root=self.root,
+                                  owner_uid=os.getuid(), state_reader=lambda unit: "active")
+        self.path("service").write_text(self.plan["service_text"])
+        self.path("service").chmod(0o666)
+        with self.assertRaisesRegex(ValueError, "Unexpected mode"):
+            PRIV.inspect_existing("deploy", 1234, root=self.root,
+                                  owner_uid=os.getuid(), state_reader=lambda unit: "active")
+
     def test_expired_preparation_never_grants_access(self):
         self.plan = PRIV.make_plan("deploy", 1234, 15,
                                    datetime(2000, 1, 1, tzinfo=timezone.utc))
@@ -181,6 +229,9 @@ class LeaseTests(unittest.TestCase):
         result = subprocess.run(command, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("requires root", result.stderr)
+        result = subprocess.run(command + ["--inspect"], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Inspection requires root", result.stderr)
 
 
 if __name__ == "__main__":

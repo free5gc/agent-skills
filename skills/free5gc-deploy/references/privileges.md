@@ -1,130 +1,168 @@
-# One-time privilege preparation
+# Privilege preflight and bootstrap
 
-Complete permission preparation before installing components. Ubuntu sudo and
-agent sandbox/command approval are independent gates. Use the agent's supported
-host-execution policy; a skill cannot grant sandbox access or supply a password.
-Do not disable approval settings or run the whole agent as root.
+Finish this preflight before any package, kernel, network, test, or startup
+operation. Ubuntu sudo authentication and the agent's host-execution approval
+are independent gates. A skill cannot supply a password, escape a sandbox, or
+authorize its own sudoers change.
 
-## Establish the deployment path
+## Select the path before anything can prompt
 
-1. Identify the non-root deployment account and inspect existing sudo policy.
-   In the agent's approved host execution context, check `sudo -n true`,
-   `sudo -n -E true`, and `sudo -n -v`. The selected upstream `test.sh` and
-   `run.sh` use both environment-preserving sudo and credential validation.
-   Probe again in a fresh tool terminal and in the actual detached launch
-   context if used. A single successful `true` does not establish all privileges.
-2. Reuse existing adequate noninteractive sudo access without changing it. A
-   command-specific policy may still deny actual installation operations;
-   inspect that policy and resolve missing access before starting.
-3. Otherwise, on a dedicated deployment VM, explain the one-time preparation:
-   the named account will have **unrestricted root sudo**, across its processes
-   and terminals, for a default 120 minutes (select 15–240 minutes based on the
-   host). This permits adaptive package/kernel/network repairs. It is not a
-   sandbox or a command allowlist. Get the host owner's explicit authorization
-   for this temporary policy if it is not already present in the conversation.
-   Bundle this with the initial installation permission preparation; do not ask
-   again at each stage. Ordinary installation permission alone does not imply
-   permission to change sudoers.
-4. Review and run the helper below. If sudo requires a password, the user enters
-   it directly into a supported terminal prompt once. Never ask for it in chat
-   or place it in a tool argument, environment, file, or log. If the agent has no
-   user-accessible password prompt, give the owner the single concrete helper
-   command to run in their terminal, then verify access from the agent and
-   continue the deployment. This is only the initial privilege bootstrap; the
-   agent executes all installation, test, cleanup, and startup work.
+Identify the non-root deployment account, the selected agent execution context,
+and whether final processes will use a detached launch context. Use only
+noninteractive probes at this point:
 
-A sandbox denial (`no new privileges`, blocked setuid, denied system paths) must
-use the agent's normal host-execution approval mechanism. A sudo lease cannot
-resolve that denial. The owner must select permissions suitable for deployment;
-if the agent still requires individual command approvals, explain that limitation
-instead of promising zero further approval prompts.
+```bash
+sudo -n true
+sudo -n -E true
+sudo -n -v
+sudo -n -l
+```
 
-## Prepare a bounded lease
+Run the first three probes again in a fresh tool terminal and through the actual
+detached launch mechanism before using it. `test.sh` and `run.sh` may use both
+`sudo -E` and `sudo -v`. Never omit `-n` during discovery: allocating a PTY does
+not mean the user has a secure, accessible password-entry channel.
 
-Resolve `F5GC_SKILL_DIR` to the installed skill's absolute directory and
-`F5GC_DEPLOY_USER` to the actual non-root account. Read the helper before running
-it. It uses Python 3, sudo/visudo, util-linux's `runuser`, and a running systemd
-system manager (standard Ubuntu host tools).
-First produce a reviewable plan without privilege or host changes:
+Read the selected release's `quick-setup.sh`, `test.sh`, and `run.sh`, enumerate
+their privileged commands, and compare them with `sudo -n -l`. For a
+command-specific policy, check the real command plus arguments with `sudo -n -l
+-- <command> <arguments>` where supported. The three probes only establish
+authentication behavior; even three successes do not prove that package,
+module, network, test, and startup commands are authorized.
+
+Choose exactly one path:
+
+- **Prepared host / adequate preexisting access:** all probes work in every
+  required context and policy covers the actual commands. Reuse it. Do not
+  create a lease, ask for redundant permission, change the policy, or revoke it
+  at handoff. Keep source, builds, logs, and Webconsole owned by the deployment
+  account and elevate only operations that need root. See
+  [prepared-host.md](prepared-host.md) for owner provisioning.
+- **Existing helper lease:** lease artifacts exist from an earlier bootstrap.
+  Do not rerun the create command. Follow **Resume an existing lease** below.
+- **Missing access, secure direct input supported:** use the interactive
+  bootstrap fallback below. Generate the plan first, obtain explicit consent,
+  and authenticate only through the product's documented user-facing secret
+  input attached to that exact process.
+- **Missing access, no secure direct input:** use noninteractive sudo for agent
+  attempts so no inaccessible prompt is opened. Present the reviewed owner
+  bootstrap command, pause at the access boundary, and resume automatically
+  after the owner runs it. This is not a successful one-prompt deployment.
+- **Agent execution policy blocks host actions:** request the product's normal
+  host-execution approval. Do not try to repair that boundary with sudoers.
+
+Treat secure input as supported only when the interface explicitly exposes a
+user-controlled, secret entry channel to the same waiting process. A PTY,
+interactive shell flag, or visible `[sudo] password` text is not evidence. Never
+ask for a password in chat or put one in command arguments, environment
+variables, files, clipboard instructions, or logs.
+
+## Interactive bootstrap fallback
+
+Use this only on a dedicated host when existing access is inadequate. Resolve
+`F5GC_SKILL_DIR` to this installed skill's absolute directory and
+`F5GC_DEPLOY_USER` to the actual account. Read the helper implementation, then
+generate its complete non-mutating plan before requesting authorization:
 
 ```bash
 python3 "$F5GC_SKILL_DIR/scripts/prepare-privileges.py" \
   --user "$F5GC_DEPLOY_USER" --minutes 120 --dry-run
 ```
 
-Once the owner has authorized that scope, execute once through the approved
-terminal, substituting concrete absolute paths/account values if handing the
-bootstrap command to the owner:
+Present the relevant plan output and explain all of the following together:
+
+- the exact account;
+- unrestricted root sudo across that account's processes and terminals;
+- the selected 15–240 minute duration and UTC expiry;
+- the sudoers path, cleanup service/timer, automatic expiry, and explicit revoke
+  command;
+- whether authentication will use a verified secure direct-input channel or the
+  owner's terminal.
+
+Obtain explicit owner authorization before creating anything. The installation
+request by itself, a tool approval, the dry-run, or
+`--acknowledge-root-access` is not consent to alter sudoers. Reuse consent already
+given in the conversation for the same account, unrestricted scope, and
+duration; do not ask twice. Consent does not provide a password or bypass agent
+execution approval.
+
+After authorization, run the command once. With verified secure direct input,
+attach this exact process to that channel. Otherwise show this exact command
+with concrete absolute path, account, and duration for the owner to run in their
+own terminal:
 
 ```bash
 sudo /usr/bin/python3 -I "$F5GC_SKILL_DIR/scripts/prepare-privileges.py" \
   --user "$F5GC_DEPLOY_USER" --minutes 120 --acknowledge-root-access
 ```
 
-Record its printed expiry, rule path, timer/service names, and revoke command
-in the private deployment record. The helper validates sudoers, refuses existing
-lease artifacts, creates root-owned files, and arms a persistent systemd timer
-before exposing the grant. The rule includes `NOTAFTER`; the timer removes the
-rule and its per-user Defaults, clears the user's sudo credential cache, disables
-itself, and removes its unit files.
-`verifypw=never` allows upstream `sudo -v` even when preexisting password-based
-rules exist; `timestamp_timeout=0` avoids relying on cached authentication.
-These Defaults apply to the account until the rule is removed, so verify cleanup
-rather than treating the command grant's expiry as full policy restoration.
-The timer is for privilege cleanup only, not for running Core or Webconsole.
+This is the only owner-terminal deployment action. The agent performs the
+installation, build, test, cleanup, networking, and startup after access is
+verified. Do not replace those stages with a generated script.
 
-Immediately verify all three probes above from the agent's new execution
-contexts and inspect `systemctl status <printed-timer-name>`. Policy precedence,
-`requiretty`, or an inactive sudoers include may prevent effective access despite
-valid syntax. If a probe fails, revoke the lease before pausing for assistance;
-do not silently loosen unrelated policy. No installation begins until these
-checks pass. If the helper fails, inspect its error and verify rollback before
-retrying. Existing lease files may indicate another deployment: do not overwrite
-or remove them without establishing ownership.
+The helper grants `NOPASSWD: ALL` with `NOTAFTER`, plus per-user
+`verifypw=never` and `timestamp_timeout=0`. It validates sudoers, creates files
+exclusively, arms a persistent systemd cleanup timer before exposing the grant,
+rolls back failure, clears cached credentials during cleanup, and preserves
+unrelated sudo policy. The timer bounds privilege cleanup, not Core lifetime.
 
-## Continue automatically, then revoke
+## Resume an existing lease
 
-Execute installation, TestRegistration, subscriber/resource cleanup, networking,
-and final Core/Webconsole startup yourself. Keep builds and Webconsole under
-the deployment user. Before a long stage, check time remaining against its
-bounded deadline; leave time for cleanup. Do not silently renew the lease.
-If the budget is insufficient, finish owned cleanup and revoke before requesting
-another explicitly bounded window. Resume successful stages rather than
-reinstalling everything.
+After bootstrap, after an interrupted turn, or whenever matching artifacts
+already exist, inspect instead of recreating them:
 
-After successful readiness checks, or before returning with a failure/cancellation:
+```bash
+sudo -n /usr/bin/python3 -I "$F5GC_SKILL_DIR/scripts/prepare-privileges.py" \
+  --user "$F5GC_DEPLOY_USER" --inspect
+```
 
-1. On failure, first stop owned test/partial startup processes and clean up owned
-   test resources while privilege is available. Preserve diagnostic logs. On
-   success, retain the final Core/Webconsole processes.
-2. Execute the helper's exact printed revoke command, for example
-   `sudo -n /usr/bin/systemctl start free5gc-deploy-privileges-1000.service`.
-   Use the actual UID. This starts a root cleanup process which removes only
-   that lease and its units. Wait for it to complete.
-3. Verify the printed sudoers path and unit files are absent and the timer is
-   inactive; use `sudo -K` as the deployment user to remove cached credentials.
-   Do not require all sudo commands to fail: preexisting grants must remain.
-4. Recheck Core/Webconsole readiness after revocation. Running privileged
-   processes are not terminated by removing sudo permission. Later restart or
-   privileged shutdown returns to the owner's normal sudo authentication.
-   Record concrete stop commands for owned processes: upstream signal handlers
-   may themselves invoke sudo, so an unattended Ctrl-C is not a complete
-   shutdown plan after lease removal.
+The inspection verifies root ownership, modes, exact account/rule/unit content,
+timer state, UTC expiry, and remaining seconds without changing the host. Record
+its JSON. Continue only when `status` is `ACTIVE`, the remaining time covers the
+next bounded stage plus cleanup, the three probes succeed in fresh and detached
+contexts, and policy covers the actual privileged commands. Resume the same
+checkout and completed stages; do not restart the deployment.
 
-If the agent crashes, the timer performs cleanup at expiry; when powered off at
-expiry, its persistent calendar timer catches up after boot. `NOTAFTER` also
-bounds the command grant independently of the timer. Expiry does not terminate
-already-running root commands. The owner can run the printed revoke command
-without `-n` using their normal sudo password if the lease has expired. Report
-any incomplete cleanup explicitly; do not claim successful handoff with an
-unremoved lease. A reboot or failed timer may require checking the recorded
-paths and normal administrator cleanup before resuming.
+For `EXPIRED`, `TIMER_INACTIVE`, missing, or mismatched artifacts, preserve the
+diagnostics and stop new privileged stages. Clean only this attempt's resources
+while valid access remains. Do not overwrite artifacts, rerun the helper, remove
+unknown rules, or silently extend the authorized duration. If the lease no
+longer permits inspection or cleanup, provide its recorded paths and exact owner
+administrator action required. A new window requires new explicit scope and
+authorization.
 
-For unattended VM evaluation, the owner can provision adequate noninteractive
-sudo in the VM image/cloud-init and choose an agent policy allowing installation.
-Do not add or revoke a lease when existing access already suffices. When resuming
-an old `privilege.sh` attempt, inspect its completed stages and execute the
-remaining authorized commands yourself after this preflight.
+## Verify, deploy, then revoke a created lease
+
+Immediately after lease creation or resumption:
+
+1. Record inspection JSON and `systemctl status <unit>.timer`.
+2. Run all three noninteractive probes from a new tool terminal and the actual
+   detached launch context. Check actual command coverage as described above.
+3. If verification fails, preserve evidence and use the printed revoke command
+   while access exists; do not loosen unrelated policy.
+4. Continue the autonomous deployment. Before long stages, compare their
+   deadlines with `remaining_seconds`, leaving time for owned cleanup and
+   revocation.
+
+After successful readiness checks, or before returning with a failure:
+
+1. On failure, stop owned test/partial processes and clean owned resources while
+   privilege remains. On success, keep the final Core/Webconsole running.
+2. Run the inspection's exact revoke command, for example
+   `sudo -n /usr/bin/systemctl start free5gc-deploy-privileges-1000.service`, and
+   wait for completion.
+3. Verify the recorded sudoers path and both unit files are absent and the timer
+   is inactive. Run `sudo -K` as the deployment user. Do not require all sudo
+   commands to fail because preexisting owner access must remain.
+4. Recheck Core/Webconsole readiness and record stop/restart commands that work
+   after normal sudo authentication is restored. Upstream signal handlers may
+   invoke sudo, so unattended Ctrl-C may not be a complete shutdown procedure.
+
+Do not revoke access classified as prepared/preexisting. Removing a created
+lease does not terminate already-running privileged processes. If the agent
+crashes, `NOTAFTER` bounds new commands and the persistent timer catches up after
+boot, but neither stops already-running root commands. Report incomplete cleanup
+instead of claiming success.
 
 References: [sudoers policy and date constraints](https://www.sudo.ws/docs/man/sudoers.man/),
-[systemd calendar and persistent timers](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html).
+[systemd persistent timers](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html).

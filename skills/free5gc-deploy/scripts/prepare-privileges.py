@@ -2,7 +2,8 @@
 """Create a bounded sudo lease on a dedicated Ubuntu deployment host.
 
 Run --dry-run unprivileged to review the exact policy and cleanup units first.
-This does not install free5GC or alter agent sandbox/approval settings.
+Run --inspect through existing noninteractive sudo to verify a created lease.
+Neither mode installs free5GC or alters agent sandbox/approval settings.
 """
 
 import argparse
@@ -17,13 +18,16 @@ import subprocess
 import sys
 
 
-def make_plan(user, uid, minutes, now=None):
+def validate_subject(user, uid):
     if not re.fullmatch(r"[a-z_][a-z0-9_-]*[$]?", user) or uid <= 0:
         raise ValueError("Use a non-root deployment account with a simple Unix username")
-    if not 15 <= minutes <= 240:
-        raise ValueError("Lease duration must be between 15 and 240 minutes")
-    now = now or datetime.now(timezone.utc)
-    expiry = now + timedelta(minutes=minutes)
+
+
+def make_plan_for_expiry(user, uid, expiry):
+    validate_subject(user, uid)
+    if expiry.tzinfo is None:
+        raise ValueError("Lease expiry must include a timezone")
+    expiry = expiry.astimezone(timezone.utc).replace(microsecond=0)
     unit = f"free5gc-deploy-privileges-{uid}"
     rule = f"/etc/sudoers.d/zz-{unit}"
     service = f"/etc/systemd/system/{unit}.service"
@@ -62,6 +66,16 @@ def make_plan(user, uid, minutes, now=None):
     }
 
 
+def make_plan(user, uid, minutes, now=None):
+    validate_subject(user, uid)
+    if not 15 <= minutes <= 240:
+        raise ValueError("Lease duration must be between 15 and 240 minutes")
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        raise ValueError("Current time must include a timezone")
+    return make_plan_for_expiry(user, uid, now + timedelta(minutes=minutes))
+
+
 def run(command):
     subprocess.run(command, check=True, timeout=60)
 
@@ -71,6 +85,75 @@ def trusted_directory(path):
         info = entry.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
             raise ValueError(f"Expected root-owned directory without group/other writes: {entry}")
+
+
+def systemd_timer_state(unit):
+    result = subprocess.run(
+        ["/usr/bin/systemctl", "is-active", unit + ".timer"],
+        check=False, capture_output=True, text=True, timeout=60,
+    )
+    return result.stdout.strip() or f"unknown (exit {result.returncode})"
+
+
+def inspect_existing(user, uid, root=Path("/"), now=None,
+                     owner_uid=0, state_reader=systemd_timer_state):
+    """Verify an existing helper-created lease without changing host state."""
+    validate_subject(user, uid)
+    unit = f"free5gc-deploy-privileges-{uid}"
+    locations = {
+        "rule": f"/etc/sudoers.d/zz-{unit}",
+        "service": f"/etc/systemd/system/{unit}.service",
+        "timer": f"/etc/systemd/system/{unit}.timer",
+    }
+    paths = {key: root / value.lstrip("/") for key, value in locations.items()}
+    expected_modes = {"rule": 0o440, "service": 0o644, "timer": 0o644}
+    contents = {}
+    for key, path in paths.items():
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != owner_uid:
+            raise ValueError(f"Untrusted lease artifact: {path}")
+        if stat.S_IMODE(info.st_mode) != expected_modes[key]:
+            raise ValueError(f"Unexpected mode on lease artifact: {path}")
+        contents[key] = path.read_text()
+
+    match = re.fullmatch(
+        r"# Temporary free5GC deployment lease; removed by its cleanup timer\.\n"
+        rf"Defaults:{re.escape(user)} verifypw=never, timestamp_timeout=0\n"
+        rf"{re.escape(user)} ALL=\(root\) NOTAFTER=(\d{{14}}Z) NOPASSWD: ALL\n",
+        contents["rule"],
+    )
+    if not match:
+        raise ValueError("Existing sudo rule does not match this helper and deployment account")
+    expiry = datetime.strptime(match.group(1), "%Y%m%d%H%M%SZ").replace(tzinfo=timezone.utc)
+    plan = make_plan_for_expiry(user, uid, expiry)
+    if contents["service"] != plan["service_text"] or contents["timer"] != plan["timer_text"]:
+        raise ValueError("Lease cleanup units do not match the sudo rule")
+
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        raise ValueError("Current time must include a timezone")
+    remaining = int((expiry - now.astimezone(timezone.utc)).total_seconds())
+    timer_state = state_reader(unit)
+    if remaining <= 0:
+        status = "EXPIRED"
+    elif timer_state != "active":
+        status = "TIMER_INACTIVE"
+    else:
+        status = "ACTIVE"
+    return {
+        "status": status,
+        "user": user,
+        "uid": uid,
+        "expires_utc": plan["expires_utc"],
+        "remaining_seconds": max(0, remaining),
+        "timer_state": timer_state,
+        "rule": plan["rule"],
+        "service": plan["service"],
+        "timer": plan["timer"],
+        "unit": unit,
+        "revoke_command": plan["revoke_command"],
+        "artifacts_verified": True,
+    }
 
 
 def create_file(path, content, mode):
@@ -141,12 +224,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user", required=True)
     parser.add_argument("--minutes", type=int, default=120)
-    parser.add_argument("--dry-run", action="store_true", help="Print policy/units without host changes")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", help="Print policy/units without host changes")
+    mode.add_argument("--inspect", action="store_true",
+                      help="Verify an existing lease and report its remaining time without changes")
     parser.add_argument("--acknowledge-root-access", action="store_true",
                         help="Host owner approved temporary unrestricted root sudo for this account")
     args = parser.parse_args()
     try:
-        plan = make_plan(args.user, pwd.getpwnam(args.user).pw_uid, args.minutes)
+        uid = pwd.getpwnam(args.user).pw_uid
+        if args.inspect:
+            if os.geteuid() != 0:
+                raise ValueError("Inspection requires root to read protected lease artifacts")
+            print(json.dumps(inspect_existing(args.user, uid), indent=2))
+            return 0
+        plan = make_plan(args.user, uid, args.minutes)
         if not args.dry_run:
             if os.geteuid() != 0 or not args.acknowledge_root_access:
                 raise ValueError("Installation requires root and --acknowledge-root-access")

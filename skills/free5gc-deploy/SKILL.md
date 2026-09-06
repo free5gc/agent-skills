@@ -22,18 +22,25 @@ agent-specific MCP server, browser automation, or other skill is required.
   host with sudo and Internet access. These are evaluation targets, not a claim
   of completed cross-version testing. Detect the actual OS and kernel; follow
   the non-LTS compatibility guidance in the installation reference.
+- The primary one-prompt path is a **prepared host**: its owner has already
+  provisioned adequate noninteractive sudo for the deployment account and an
+  agent execution policy that permits host installation. Read
+  [prepared-host.md](references/prepared-host.md) for that explicit setup
+  boundary. Do not imply that skill installation itself prepares root access.
 - An installation request authorizes ordinary dependency, build, configuration,
   test, and startup steps within the agent's permissions. Continue through
   recoverable failures; ask only for missing access, consequential choices, or
   actions outside that scope. Do not ask for approval at every stage.
-- Complete one-time privilege preparation before installing components:
-  follow [privileges.md](references/privileges.md). Execute required sudo steps
-  through the agent's approved tools. Reuse adequate existing access, or prepare
-  an explicitly authorized, time-limited sudo lease with automatic cleanup.
-  Do not finish after building only the control plane or hand the remaining
-  installation to the user as `privilege.sh`.
-  If access is blocked, report the exact permission failure and resume after
-  it is resolved; a generated script is not a completed deployment.
+- Before any password-requiring operation, use
+  [privileges.md](references/privileges.md) to select the prepared-host,
+  existing-lease, secure-input bootstrap, owner-terminal bootstrap, or
+  agent-policy path. All discovery attempts use `sudo -n`. Reuse adequate
+  existing access without changing or revoking it. Create a time-limited lease
+  only after its helper and dry-run plan have been reviewed and the owner has
+  explicitly authorized that exact scope. A PTY alone is not a secure password
+  path. If owner bootstrap is required, give only that concrete access command,
+  then inspect the resulting lease and resume automatically; do not rerun the
+  helper or hand off the rest of installation as `privilege.sh`.
 - Read the selected checkout's scripts before execution. Use `quick-setup.sh`
   as a dependency reference; execute and verify its stages separately so an apt
   error cannot be hidden by a later success message.
@@ -48,8 +55,8 @@ agent-specific MCP server, browser automation, or other skill is required.
 
 ## Workflow
 
-1. **Check access, inspect, install, build.** Resolve
-   [privileges.md](references/privileges.md) first, then follow
+1. **Check access, inspect, install, build.** Select and verify the execution
+   path in [privileges.md](references/privileges.md) first, then follow
    [single-host.md](references/single-host.md).
    Record host, checkout, versions, relevant network settings, and successful
    stages in a private deployment directory outside the skill.
@@ -69,9 +76,10 @@ agent-specific MCP server, browser automation, or other skill is required.
    core with `./run.sh` and Webconsole with `go run server.go` in their respective
    working directories. Keep both running without tmux. Verify readiness and
    open the login page, or provide a reachable URL and remote access instructions
-   on a headless host. Revoke any lease created for this deployment and recheck
-   readiness before handoff. On failure, clean up owned resources and revoke
-   the lease before returning; the expiry timer covers an unexpected interruption.
+   on a headless host. Revoke only a lease created for this deployment and
+   recheck readiness before handoff; never revoke preexisting owner policy. On
+   failure, clean up owned resources and revoke the created lease before
+   returning; the expiry timer covers an unexpected interruption.
 
 When a stage fails, read the relevant entry in
 [troubleshooting.md](references/troubleshooting.md), inspect evidence, repair the
