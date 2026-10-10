@@ -79,3 +79,9 @@ Each stage is recorded in a local Conventional Commit. No remote publication is 
   all installed resources matched exactly and script-relative help checks passed.
 - Final README/docs/skill relative links, skill validator and whitespace checks
   passed. All changes are local Conventional Commits; no push or publication.
+
+## 7. Remove implementation specification
+
+- Deleted the repository's implementation specification at the user's request.
+- Kept the delivered skill and runtime resources unchanged.
+- Committed this deletion on main before editing README's Publication section.
