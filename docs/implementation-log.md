@@ -35,3 +35,27 @@ Each stage is recorded in a local Conventional Commit. No remote publication is 
   service and unloaded module cannot become deployment success.
 - Initial Bash syntax validation passed. Fixture/static/real read-only validation
   and the public README are the next stage.
+
+## 4. Regression tests and diagnostic hardening
+
+- Added commit-pinned inert core fixtures and isolated command mocks; all 20
+  unittest checks passed (9.5 seconds). No fixture Makefile or installer executed.
+- Covered missing/denied commands and files, unavailable YAML dependency, paths
+  with spaces, missing/non-executable/symlink artifacts, dynamic/unknown Makefiles,
+  supported and unknown/malformed/duplicate-key configs, absent/unloaded/denied
+  modules, inactive services, AVX/non-Ubuntu/ARM-like snapshots and real timeout.
+- Added before/after fixture integrity, frontmatter, all Bash syntax and relative
+  resource link checks; skill-creator validator and git diff --check passed.
+- Hardened known missing-module classification, YAML duplicate-key rejection,
+  permission handling and Makefile redefinition detection based on test review.
+- Corrected an obsolete configuration URL after checking the official guide
+  index. Recorded manual-versus-quick kernel/module versions and RAM guidance.
+- CLI 1.5.18 discovered free5gc-deploy locally. Temporary project installation
+  targeting Codex, Claude Code and GitHub Copilot succeeded; installed resources
+  were byte-identical and both Bash --help commands resolved bundled dependencies.
+  No existing agent settings were modified; temporary installation was removed.
+- Development-host safe read-only runs: collect-env exit 2 (support unconfirmed);
+  check-install against this skill repo exit 1 (core YAML absent), correctly not
+  declaring a deployment. Existing host dependencies/services were observed only.
+- ShellCheck is not present; it has not been run. Agent conversation and real
+  single-/two-VM E2E results remain unverified. See final validation report.

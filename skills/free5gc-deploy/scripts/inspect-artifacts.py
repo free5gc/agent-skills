@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Conservative inert Makefile inspection; never invoke make or shell expressions."""
 import argparse
+import os
 from pathlib import Path
 import re
 
@@ -17,10 +18,10 @@ def inspect(repo):
         # legacy C-UPF require manual inspection, never evaluation.
         assignments = {}
         for key in ('GO_NF', 'GO_BIN_PATH', 'NF', 'WEBCONSOLE', 'WEBCONSOLE_FRONTEND'):
-            matches = re.findall(r'^' + key + r'\s*(?::=|=)\s*([^\n]+)$', text, re.M)
-            if len(matches) != 1:
+            matches = re.findall(r'^' + key + r'\s*([:+?]?=)\s*([^\n]+)$', text, re.M)
+            if len(matches) != 1 or matches[0][0] not in ('=', ':='):
                 return [('UNKNOWN', 'artifacts', 'unsupported Makefile definitions')]
-            assignments[key] = matches[0].strip()
+            assignments[key] = matches[0][1].strip()
         names = assignments['GO_NF'].split()
         binpath = assignments['GO_BIN_PATH']
         if (not names or len(names) > 64 or len(set(names)) != len(names)
@@ -44,16 +45,23 @@ def inspect(repo):
             # Do not print user-controlled source fields or follow paths outside repo.
             if not target.resolve().is_relative_to(repo.resolve()):
                 results.append(('UNKNOWN', 'artifact', 'output symlink outside repo'))
-            elif not target.exists():
-                results.append(('FAIL', 'artifact', f'missing {relative}'))
-            elif not target.is_file() or not target.stat().st_mode & 0o444:
-                results.append(('UNKNOWN', 'artifact', f'unreadable/non-file {relative}'))
-            elif target.stat().st_size == 0:
-                results.append(('FAIL', 'artifact', f'empty {relative}'))
-            elif relative.suffix != '.html' and not target.stat().st_mode & 0o111:
-                results.append(('FAIL', 'artifact', f'not executable {relative}'))
             else:
-                results.append(('PASS', 'artifact', f'present {relative}; existence only'))
+                try:
+                    metadata = target.stat()
+                except FileNotFoundError:
+                    results.append(('FAIL', 'artifact', f'missing {relative}'))
+                    continue
+                except OSError:
+                    results.append(('UNKNOWN', 'artifact', f'cannot observe {relative}'))
+                    continue
+                if not target.is_file() or not os.access(target, os.R_OK):
+                    results.append(('UNKNOWN', 'artifact', f'unreadable/non-file {relative}'))
+                elif metadata.st_size == 0:
+                    results.append(('FAIL', 'artifact', f'empty {relative}'))
+                elif relative.suffix != '.html' and not os.access(target, os.X_OK):
+                    results.append(('FAIL', 'artifact', f'not executable {relative}'))
+                else:
+                    results.append(('PASS', 'artifact', f'present {relative}; existence only'))
         return results
     except (OSError, UnicodeError):
         return [('UNKNOWN', 'artifacts', 'Makefile/output inaccessible')]

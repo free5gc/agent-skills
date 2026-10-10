@@ -26,9 +26,10 @@ supported VM CPU or a separately reviewed manual installation, not a silent
 MongoDB downgrade. An unavailable CPU observation is UNKNOWN, not absence.
 
 These are source-reviewed conditions, not claims that all combinations were
-runtime tested. Recheck sources for a newer/different version. There is no
-reviewed hard RAM/disk minimum: report observed capacity and discuss build/storage
-risk without inventing a numeric rejection threshold. Check kernel headers match
+runtime tested. Recheck sources for a newer/different version. The [manual build guide](https://free5gc.org/guide/3-install-free5gc/) recommends
+at least 2 GB RAM and warns Webconsole may fail below 1 GB; these are guidance,
+not a universal hard rejection threshold. No reviewed hard disk minimum was
+found: report capacity and discuss build/storage risk without inventing one. Check kernel headers match
 `uname -r` when investigating gtp5g; do not assert every kernel is supported.
 
 Choose interfaces only after topology: use `ip -br -4 addr`, `ip -4 route`, and

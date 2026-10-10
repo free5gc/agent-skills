@@ -11,7 +11,8 @@ unconfirmed. Source review is not runtime deployment validation.
 | Prerequisites / installer / startup | [Quick setup](https://free5gc.org/guide/quick-setup/) | Ubuntu list, AVX, full source semantics, user terminals |
 | Installer implementation | [quick-setup.sh](https://github.com/free5gc/free5gc/blob/ab1280ed772ad1900a0c6c00ac4f7852eb9d491d/quick-setup.sh) | Go 1.26.2 amd64, gtp5g v0.9.16, MongoDB 8.2, UFW/forwarding, NAT selector, build and interactions |
 | Build outputs / core schema | [Makefile](https://github.com/free5gc/free5gc/blob/ab1280ed772ad1900a0c6c00ac4f7852eb9d491d/Makefile), [config](https://github.com/free5gc/free5gc/tree/ab1280ed772ad1900a0c6c00ac4f7852eb9d491d/config), [run.sh](https://github.com/free5gc/free5gc/blob/ab1280ed772ad1900a0c6c00ac4f7852eb9d491d/run.sh) | Current Go NF list, Webconsole outputs, N2/N3/PFCP and DNN pools; run.sh does transient NF-profile cleanup |
-| Configuration / manual install | [Guide index](https://free5gc.org/guide/), [manual build](https://free5gc.org/guide/3-install-free5gc/), [configuration](https://free5gc.org/guide/4-configure-free5gc/) | Follow relevant selected-version topics from index |
+| Configuration / manual install | [Guide index](https://free5gc.org/guide/), [manual build](https://free5gc.org/guide/3-install-free5gc/), [configuration](https://free5gc.org/guide/Configuration/) | Follow relevant selected-version topics from index |
+| SMF mappings | [SMF configuration](https://free5gc.org/guide/SMF-Config/) | Historical snake_case examples differ from current camelCase YAML; use checkout schema |
 | Subscriber | [Create Subscriber via Webconsole](https://free5gc.org/guide/Webconsole/Create-Subscriber-via-webconsole/) | UI workflow and field names; retain existing records |
 | N6 NAT | [UPF N6 configuration](https://free5gc.org/guide/10-UPF-Config/), [pinned UPF source](https://github.com/free5gc/go-upf/tree/616a4ff6cbd2e7de2bccd39399f37425f373bcc8) | natifname/natIfCIDR, UPF-local rules, forwarding sysctl distinct from ipForwardEnable |
 | Failure diagnosis | [Troubleshooting](https://free5gc.org/guide/Troubleshooting/) | Kernel/module and PFCP clues; historical destructive remedies not adopted |
@@ -46,6 +47,13 @@ unconfirmed. Source review is not runtime deployment validation.
   not validated package-repository compatibility on every listed Ubuntu version.
 - Web browsing could not render two simulator pages; their official HTML was
   fetched directly and read successfully. No inaccessible page is claimed reviewed.
+
+- Manual install page still lists kernel 5.0.0-23/5.4.x and gtp5g v0.9.14,
+  while quick setup uses v0.9.16 and lists newer Ubuntu releases. Kernel support
+  is not resolved by OS/version alone; verify selected module against target
+  kernel. Manual page recommends 2 GB RAM and warns about builds below 1 GB.
+- SMF guide contains historical snake_case fields. Current checkout YAML uses
+  userplaneInformation/upNodes/nodeID; do not mechanically copy old examples.
 
 Remaining runtime questions: selected Ubuntu/MongoDB combination, kernel/gtp5g
 compatibility, VM routing/firewall and complete single-/two-VM E2E need authorized

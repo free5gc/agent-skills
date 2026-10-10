@@ -86,13 +86,16 @@ service_observations() {
         inactive|failed|activating|deactivating) report UNKNOWN mongod-service "state=$state; diagnose, not proof installation absent";;
         *) report UNAVAILABLE mongod-service 'service state not observable';;
     esac
-    if info=$(bounded modinfo -F filename gtp5g); then
-        if [[ -n $info ]]; then report PASS gtp5g-installed 'module found for running kernel';
-        else report UNKNOWN gtp5g-installed 'empty module metadata'; fi
-    else
-        # modinfo failure alone cannot distinguish denial from absent module.
-        report UNKNOWN gtp5g-installed 'modinfo unavailable/failed; module absence not established'
-    fi
+    if command -v modinfo >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+        local module_rc
+        info=$(timeout -k 1s 5s modinfo -F filename gtp5g </dev/null 2>&1)
+        module_rc=$?
+        if ((module_rc == 0)) && [[ -n $info ]]; then
+            report PASS gtp5g-installed 'module found for running kernel'
+        elif ((module_rc == 1)) && [[ $info == 'modinfo: ERROR: Module gtp5g not found.' ]]; then
+            report FAIL gtp5g-installed 'module not found for running kernel; inspect selected release and headers'
+        else report UNKNOWN gtp5g-installed 'module metadata denied, empty, timed out or unrecognized error'; fi
+    else report UNAVAILABLE gtp5g-installed 'modinfo/timeout missing'; fi
     if [[ -r $system_root/proc/modules ]]; then
         local modules
         if modules=$(bounded cat -- "$system_root/proc/modules"); then

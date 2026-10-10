@@ -14,6 +14,23 @@ except ImportError:
     sys.exit(2)
 
 
+class UniqueLoader(yaml.BaseLoader):
+    """Keep identifier widths and reject YAML duplicate keys."""
+
+
+def unique_mapping(loader, node):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node)
+        if key in mapping:
+            raise ValueError("duplicate YAML key")
+        mapping[key] = loader.construct_object(value_node)
+    return mapping
+
+
+UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -50,6 +67,9 @@ def check_config(amf, smf, upf, allow_loopback=False):
                 re.fullmatch(r"\d{2,3}", plmn["mnc"]), "Preserve MCC/MNC string widths")
         plmns.append(plmn)
         supported_slices.update(slice_key(value) for value in item["snssaiList"])
+    for tai in amf["supportTaiList"]:
+        require(tai["plmnId"] in plmns, "TAI PLMN is not supported")
+        require(re.fullmatch(r"[0-9a-fA-F]{6}", tai["tac"]), "TAC must be six hex digits")
     amf_dnns = set(amf["supportDnnList"])
     offered = set()
     for item in smf["snssaiInfos"]:
@@ -126,14 +146,18 @@ def main():
         documents = []
         for name in ("amfcfg.yaml", "smfcfg.yaml", "upfcfg.yaml"):
             path = args.repo / "config" / name
-            if not path.exists():
+            try:
+                size = path.stat().st_size
+            except FileNotFoundError:
+                size = None
+            if size is None:
                 print("FAIL [config] required core YAML file missing")
                 return 1
-            if path.stat().st_size > 1_000_000:
+            if size > 1_000_000:
                 print("UNKNOWN [config] configuration exceeds bounded parser scope")
                 return 2
             with path.open() as stream:
-                documents.append(yaml.load(stream, Loader=yaml.BaseLoader))
+                documents.append(yaml.load(stream, Loader=UniqueLoader))
         check_config(*documents, allow_loopback=True)
     except PermissionError:
         print("UNKNOWN [config] permission denied")

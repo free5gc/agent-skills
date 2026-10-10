@@ -39,7 +39,8 @@ substitute. Supported scope is one UPF with AMF/SMF/UPF common schemas, matching
 PLMN/slice/DNN/N3/PFCP/pools; runtime routing, NSSF/subscriber and NAT permissions
 need separate evidence. PASS here is scoped, not complete configuration validation.
 
-mongod `inactive`/`failed` means runtime unavailable for verification, not proof
+A recognized modinfo “module not found” result is FAIL for the running kernel;
+other metadata errors are UNKNOWN. mongod `inactive`/`failed` means runtime unavailable for verification, not proof
 that installation is absent. Inspect why via troubleshooting. Module installed,
 loaded and inaccessible are distinct: an installed but unloaded module is an
 unknown readiness observation. Restricted log access is UNKNOWN; offer specific
