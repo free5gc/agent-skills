@@ -85,3 +85,9 @@ Each stage is recorded in a local Conventional Commit. No remote publication is 
 - Deleted the repository's implementation specification at the user's request.
 - Kept the delivered skill and runtime resources unchanged.
 - Committed this deletion on main before editing README's Publication section.
+
+## 8. Remove README publication section
+
+- Removed only README's Publication section after the specification deletion commit.
+- Verified the specification is absent, the requested section is absent, and the
+  diff has no whitespace errors. Documentation-only changes require no runtime tests.

@@ -81,12 +81,3 @@ The tests require Python3/PyYAML and Bash and use inert fixtures/mocks. See the
 [implementation record](docs/implementation-log.md) and
 [official source/version review](skills/free5gc-deploy/references/sources.md).
 The existing [Apache-2.0 license](LICENSE) is retained.
-
-## Publication
-
-Review the local commits and validation gaps first. An authorized maintainer can
-push this branch to the intended free5gc/agent-skills repository and merge/publish
-it, then verify both remote installation commands in clean project/global scopes.
-This implementation did not create a remote, push or publish. Validate real
-agent conversations and authorized single-/two-VM labs before claiming those
-outcomes; follow the detailed release checks in the validation report.
