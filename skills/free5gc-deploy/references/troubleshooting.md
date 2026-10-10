@@ -1,35 +1,30 @@
-# Diagnose and resume
+# Evidence-led troubleshooting
 
-Read the failing command's output and its postcondition. Fix the demonstrated
-cause, record the change, then retry the affected stage with a fresh log. Do not
-replace an upstream integration test with a weaker test to obtain success.
+Enter on an installer error, failed verification or an existing deployment issue.
+Record version/host/network/stage and sanitized nearby errors first. Facts and
+hypotheses must be labeled separately. Read-only checks can continue; privileged
+repairs and sensitive log inspection are user-run. Recheck only the repaired
+stage, expanding scope if evidence warrants it. Never rerun the whole installer,
+reset a repo, erase a DB or flush firewall rules by default.
 
-| Symptom | Investigation and bounded repair |
-| --- | --- |
-| Stops after the control plane and hands off `privilege.sh` | Inspect the actual sudo/sandbox failure and follow `privileges.md`. Resolve access first, then have the agent execute the remaining authorized stages and verify completion. The script's existence is not a successful deployment. |
-| Any of the three `sudo -n` probes fails | Select the path in `privileges.md` before doing installation work. Do not retry without `-n` unless the product explicitly provides secure direct secret input; a PTY or a visible prompt is insufficient. |
-| Probes pass but an actual command is denied | Inspect `sudo -n -l` and the selected release's privileged command plus arguments. Generic probes prove authentication behavior, not command coverage. Reuse adequate policy; do not silently broaden a command-specific rule. |
-| Password-required sudo / no secure input | Read the helper and generate its dry-run plan, explain authentication and lease scope, and obtain explicit lease consent. Then give the concrete owner-terminal helper command. After it completes, inspect and resume; never request or capture the password. |
-| Existing lease artifact / returning after bootstrap | Run the helper's read-only `--inspect` mode. Continue the same checkout only for an `ACTIVE`, matching lease with sufficient remaining time and successful fresh-context probes. Do not rerun creation or delete unknown artifacts. |
-| Lease expires / timer is inactive | Stop new privileged stages; preserve inspection diagnostics and clean owned resources while access remains. Use recorded owner-admin recovery if needed. Do not silently renew the lease or treat `NOTAFTER` as removal of per-user Defaults. |
-| sudo blocked by sandbox / no new privileges | Use the agent's normal approval/escalation mechanism for host execution. A sudoers change cannot resolve this independent boundary and must not be proposed as its fix. |
-| apt/dpkg lock | Identify the owner (`ps`, `fuser`, systemd apt timers). Allow an active update to finish with bounded checks. Do not delete lock files or kill a healthy package operation. |
-| Interrupted dpkg / unmet dependencies | Check `dpkg --audit`, disk space, and package errors. After locks clear, use `dpkg --configure -a` or an inspected `apt-get --fix-broken install` plan. Review removals before applying. |
-| Ubuntu archive 404 | Verify actual suite and current archive status; follow `single-host.md` for EOL archive URIs, preserving suite and signatures. |
-| Third-party repo 404 / NO_PUBKEY / Signed-By conflict | Inspect the specific source, suite/version and key fingerprint against official vendor instructions. Back up and repair only that entry/key. Do not use `trusted=yes` or allow unauthenticated packages. |
-| MongoDB repo unavailable on 25.xx | Follow the documented non-LTS compatibility evaluation; never invent a plucky/questing MongoDB URL or rewrite Ubuntu's suite to noble. |
-| DNS / TLS / download failure | Inspect resolver, route, clock, proxy and CA certificates. Retry transient errors within a deadline. Keep TLS verification enabled. |
-| MongoDB fails to start | Check journal, CPU instructions, permissions, configuration, ports and disk space. Verify both server availability and a query; shell installation is not server health. |
-| Go or Corepack missing in a later shell | Reestablish the selected tool PATH; inspect upstream hard-coded tool paths and sudo environment. Do not depend on a prior `.bashrc` source. |
-| gtp5g build/load failure | Compare running kernel, headers, compiler errors, upstream compatibility, module version, Secure Boot and kernel logs. Installing a module for a different kernel does not fix the current one. Record an upstream compatibility revision if needed. |
-| Webconsole build killed | Inspect memory/OOM evidence; reduce build parallelism. Do not silently replace lockfiles or run dependency upgrades. |
-| Test stalls or fails | Inspect exact assertion and NF logs, SCTP, MongoDB, module state, test network resources, source/submodule alignment and authentication data. Stop at the deadline, clean owned resources and diagnose before retry. |
-| Shell returned 0 but no Go PASS | Treat as failure/unknown. Upstream cleanup may mask the test exit code. Use fresh output and `check-test-result.py`. |
-| Test subscriber remains | Compare provisioning/deletion helpers, including Webconsole authentication data. Use pre-test absence evidence and exact identity filters; never drop the database. |
-| Test passed but final Core fails | The test uses different configuration. Inspect final YAML consistency, ports, certificates, NF registration and PFCP association. Do not reuse test namespace addresses. |
-| Webconsole unreachable | Check page/assets locally, bind address, port, persistent process, intended firewall and SSH forwarding. Distinguish remote localhost from the browser host. |
+Each row is evidence → hypothesis → distinguishing check → minimal repair →
+reverification. Commands run on the affected target and actual network namespace.
+Adapt paths/version before handoff; do not expose config secrets.
 
-If no new evidence or repair is available, report the failing stage, concise
-error, completed work, log path and precise action needed to resume. Additional
-permissions or a reboot need their normal user/agent approval; the skill does
-not grant powers the executing agent lacks.
+| Failure stage / evidence | Hypothesis | Distinguishing checks | Minimal user-run repair | Reverification / source |
+| --- | --- | --- | --- | --- |
+| Dependency/build: first compiler/download/package error, checkout and tool versions | Wrong Go/toolchain, missing package, partial submodule, DNS/repository mismatch | collect-env; git submodule status; selected go.mod/Makefile; inspect just failing target/error and package repository for actual OS/architecture | Correct that dependency or initialize only the missing reviewed submodule, preserve local changes; rebuild affected official target, not full quick setup | Expected executable and error-free build; [quick source](sources.md), [manual build](https://free5gc.org/guide/3-install-free5gc/) |
+| MongoDB: unavailable service or connection refused | Service stopped, AVX not exposed, wrong bind/DB URI or permissions | systemctl is-active mongod; version/AVX; user `sudo journalctl -u mongod -n 50 --no-pager`; compare DB endpoint privately, no DB documents | Correct proven CPU/service/bind issue; user start service only if appropriate; do not downgrade or drop database blindly | Service active plus selected core/console successfully connects; [quick guide](https://free5gc.org/guide/quick-setup/) |
+| gtp5g: build error, module missing, UPF operation not supported | Kernel/header mismatch, unloaded module, incompatible module or Secure Boot rejection | uname -r; modinfo gtp5g; /proc/modules; matching /lib/modules/KERNEL/build; user sudo dmesg filtered to module error | Installed but unloaded: user `sudo modprobe gtp5g`; missing/mismatched: rebuild only the selected gtp5g release against running kernel after reviewing error | modinfo and loaded state; UPF startup then PFCP accepted; [official troubleshooting §7](https://free5gc.org/guide/Troubleshooting/) |
+| NF startup: missing process, bind/SBI/NRF error | Address not local, occupied port, DB/SBI mismatch | selected run.sh NF list; `ps -eo pid,comm` (avoid sensitive command arguments); log excerpt; `ss -lntu`; local IP and configured SBI addresses | Correct specific address/config/dependency or stop only confirmed conflicting lab process via user; preserve unrelated services | Required NF logs, NRF registrations and PFCP association; [basic config](https://free5gc.org/guide/4-configure-free5gc/) |
+| N2: gNB SCTP/NG setup error | VM isolation, unreachable AMF, wrong bind/port/PLMN/TAI | core and RAN IP/routes; N2 listener; gnb.amfN2Ip/ranN2Ip/amfN2Port; hypervisor network; scoped SCTP policy; compare PLMN/TAI | Correct the proven NIC/address/VM network or scoped SCTP rule; no blanket firewall disabling | NG setup accepted in AMF and gNB; [RAN integration](https://free-ran-ue.github.io/doc-user-guide/01-free5gc/) |
+| Registration/authentication rejected | Subscriber missing, SUPI/PLMN mismatch, K/OPc/AMF/SQN mismatch | sanitized rejection cause; privately compare test record and ue.authenticationSubscription, OPc mode, MSIN width; confirm AKA method | User correct only the test record/config field; account for SQN advance; never ask real secrets or reset whole DB | Registration accepted before PDU testing; [subscriber](https://free5gc.org/guide/Webconsole/Create-Subscriber-via-webconsole/), [test lesson](end-to-end-test.md) |
+| PDU session rejected or no UE address | Slice/DNN not authorized/routed, PFCP failure, pool mismatch | rejection cause, SMF/UPF PFCP logs; test subscriber DNN/S-NSSAI; AMF/SMF/UPF static checker; current NSSF configuration if applicable | Correct specific authorization/mapping/pool or UPF association issue; no NAT fix before session establishment | PDU session accepted and assigned IP in configured pool; [SMF config](https://free5gc.org/guide/4-configure-free5gc/), [test lesson](end-to-end-test.md) |
+| N3/N6: session ready but tunnel ICMP fails | GTP-U endpoint mismatch, forwarding off, wrong N6, missing return route/NAT, DN blocks ICMP | Actual tunnel/source and namespace; both DN probes; core own egress; N3 endpoints; user `sudo iptables -t nat -L POSTROUTING -n -v` / `sudo iptables -L FORWARD -n -v`; correlate uplink/downlink counters/logs | Fix proven N3/N6/forwarding/return-path issue. Current UPF manages scoped NAT rules; inspect before adding/removing duplicates. For legacy version teach reviewed scoped rules only | Repeat tunnel-bound ping and compare counters; [UPF NAT](https://free5gc.org/guide/10-UPF-Config/) |
+| Namespace: bind unreachable, DB/SBI failure, tunnel visible elsewhere | Wrong launch namespace, conflicting subnet, core separated from loopback DB, stale resources | ip netns list; actual network namespace identity; veth/routes; namespace PIDs; verify core/DB/SBI placement; inspect egress inside core namespace if separate | Stop affected user processes first, correct launch/config/route; only then recreate authorized lab resources; never ns-down on live workloads | Correct namespace IPs and reachability, then original failed NG/registration/session/ping; [namespace guide](https://free-ran-ue.github.io/doc-user-guide/03-namespace-free-ran-ue/), [actual topology](end-to-end-test.md) |
+
+The official troubleshooting page includes historical non-3GPP and destructive
+DB/firewall cleanup examples. They are version/context specific, not this skill's
+default repair. Its gtp5g kernel-change diagnosis remains useful; verify the actual
+error. Treat inaccessible logs/rule counters as UNKNOWN and provide a narrow
+user-run diagnostic command. No success can be inferred from missing evidence.
