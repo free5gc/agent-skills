@@ -59,3 +59,12 @@ Each stage is recorded in a local Conventional Commit. No remote publication is 
   declaring a deployment. Existing host dependencies/services were observed only.
 - ShellCheck is not present; it has not been run. Agent conversation and real
   single-/two-VM E2E results remain unverified. See final validation report.
+
+## 5. Final scope correction
+
+- Additional review found that multi-UPF topology is outside the static checker,
+  so it now returns UNKNOWN rather than a misleading configuration failure.
+  Added a regression: 21 checks passed, including the new topology case.
+- OS metadata is now read through the same command timeout before inert parsing.
+- Prevented helper import caches from entering skill packaging; removed only
+  generated local caches. No system or deployment changes were made.

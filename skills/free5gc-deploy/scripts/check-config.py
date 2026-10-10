@@ -14,6 +14,10 @@ except ImportError:
     sys.exit(2)
 
 
+class UnsupportedSchema(Exception):
+    """Selected topology is outside this checker's scope."""
+
+
 class UniqueLoader(yaml.BaseLoader):
     """Keep identifier widths and reject YAML duplicate keys."""
 
@@ -84,7 +88,8 @@ def check_config(amf, smf, upf, allow_loopback=False):
     topology = smf["userplaneInformation"]
     up_nodes = [(name, node) for name, node in topology["upNodes"].items()
                 if node["type"] == "UPF"]
-    require(len(up_nodes) == 1, "This checker supports exactly one UPF; inspect other topologies manually")
+    if len(up_nodes) != 1:
+        raise UnsupportedSchema()
     upf_name, node = up_nodes[0]
     an_names = {name for name, item in topology["upNodes"].items() if item["type"] == "AN"}
     require(any((link["A"] == upf_name and link["B"] in an_names) or
@@ -162,7 +167,7 @@ def main():
     except PermissionError:
         print("UNKNOWN [config] permission denied")
         return 2
-    except (KeyError, TypeError, AttributeError):
+    except (UnsupportedSchema, KeyError, TypeError, AttributeError):
         print("UNKNOWN [config] unsupported/incomplete schema; inspect selected version")
         return 2
     except (ValueError, yaml.YAMLError):

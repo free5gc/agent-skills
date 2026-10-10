@@ -6,12 +6,12 @@ source "$script_dir/common.sh"
 parse_args "$@"
 context
 # Parse only public OS metadata; never source /etc/os-release.
-if [[ -r $system_root/etc/os-release ]]; then
+if [[ -r $system_root/etc/os-release ]] && os_metadata=$(bounded cat -- "$system_root/etc/os-release"); then
     os='' release=''
     while IFS='=' read -r key value; do
         value=${value//\"/}; value=${value//\'/}
         case "$key" in ID) os=$value;; VERSION_ID) release=$value;; esac
-    done < "$system_root/etc/os-release"
+    done <<< "$os_metadata"
     if [[ $os == ubuntu ]]; then report PASS os "Ubuntu $release; verify selected-version support";
     else report UNKNOWN os "OS=$os version=$release; Ubuntu quick setup support not established"; fi
 else report UNKNOWN os 'OS metadata absent/unreadable'; fi

@@ -5,6 +5,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
+
+sys.dont_write_bytecode = True
 import unittest
 from unittest.mock import patch
 
@@ -236,6 +239,17 @@ class Diagnostics(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertIn('UNKNOWN [avx]', r.stdout)
         self.assertFalse(marker.exists())
+
+    def test_multi_upf_topology_is_unknown(self):
+        import yaml
+        p = self.repo / 'config/smfcfg.yaml'
+        data = yaml.load(p.read_text(), Loader=yaml.BaseLoader)
+        nodes = data['configuration']['userplaneInformation']['upNodes']
+        nodes['OtherUPF'] = dict(nodes['UPF'])
+        p.write_text(yaml.safe_dump(data))
+        r = self.check()
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn('UNKNOWN [config]', r.stdout)
 
     def test_cli_bound_is_enforced(self):
         # Exercise a real timeout once rather than merely testing timeout text.
