@@ -68,3 +68,14 @@ Each stage is recorded in a local Conventional Commit. No remote publication is 
 - OS metadata is now read through the same command timeout before inert parsing.
 - Prevented helper import caches from entering skill packaging; removed only
   generated local caches. No system or deployment changes were made.
+
+## 6. Delivery and release documentation
+
+- Rewrote README with skill installation (project/global/local discovery), concise
+  usage, user-run workflow, checks, license and maintainer publication steps.
+- Added validation.md with changed files, actual tests, explicit unverified
+  ShellCheck/agent-conversation/remote-publication/lab outcomes and release steps.
+- Final isolated CLI installation was repeated after the diagnostic corrections;
+  all installed resources matched exactly and script-relative help checks passed.
+- Final README/docs/skill relative links, skill validator and whitespace checks
+  passed. All changes are local Conventional Commits; no push or publication.
