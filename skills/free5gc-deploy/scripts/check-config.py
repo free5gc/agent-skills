@@ -3,7 +3,6 @@
 
 import argparse
 import ipaddress
-import json
 from pathlib import Path
 import re
 import sys
@@ -11,7 +10,29 @@ import sys
 try:
     import yaml
 except ImportError:
-    sys.exit("Missing PyYAML; install python3-yaml and use /usr/bin/python3.")
+    print("UNAVAILABLE [config] Python3/PyYAML required; no YAML fallback")
+    sys.exit(2)
+
+
+class UnsupportedSchema(Exception):
+    """Selected topology is outside this checker's scope."""
+
+
+class UniqueLoader(yaml.BaseLoader):
+    """Keep identifier widths and reject YAML duplicate keys."""
+
+
+def unique_mapping(loader, node):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node)
+        if key in mapping:
+            raise ValueError("duplicate YAML key")
+        mapping[key] = loader.construct_object(value_node)
+    return mapping
+
+
+UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
 
 
 def require(condition, message):
@@ -50,6 +71,9 @@ def check_config(amf, smf, upf, allow_loopback=False):
                 re.fullmatch(r"\d{2,3}", plmn["mnc"]), "Preserve MCC/MNC string widths")
         plmns.append(plmn)
         supported_slices.update(slice_key(value) for value in item["snssaiList"])
+    for tai in amf["supportTaiList"]:
+        require(tai["plmnId"] in plmns, "TAI PLMN is not supported")
+        require(re.fullmatch(r"[0-9a-fA-F]{6}", tai["tac"]), "TAC must be six hex digits")
     amf_dnns = set(amf["supportDnnList"])
     offered = set()
     for item in smf["snssaiInfos"]:
@@ -64,7 +88,8 @@ def check_config(amf, smf, upf, allow_loopback=False):
     topology = smf["userplaneInformation"]
     up_nodes = [(name, node) for name, node in topology["upNodes"].items()
                 if node["type"] == "UPF"]
-    require(len(up_nodes) == 1, "This checker supports exactly one UPF; inspect other topologies manually")
+    if len(up_nodes) != 1:
+        raise UnsupportedSchema()
     upf_name, node = up_nodes[0]
     an_names = {name for name, item in topology["upNodes"].items() if item["type"] == "AN"}
     require(any((link["A"] == upf_name and link["B"] in an_names) or
@@ -120,22 +145,40 @@ def check_config(amf, smf, upf, allow_loopback=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config_dir", type=Path)
-    parser.add_argument("--allow-loopback", action="store_true",
-                        help="Only for an explicitly chosen local RAN topology")
+    parser.add_argument("repo", type=Path)
     args = parser.parse_args()
     try:
         documents = []
         for name in ("amfcfg.yaml", "smfcfg.yaml", "upfcfg.yaml"):
-            with (args.config_dir / name).open() as stream:
-                # BaseLoader keeps identifiers like 010203 and 000001 as strings.
-                documents.append(yaml.load(stream, Loader=yaml.BaseLoader))
-        result = check_config(*documents, allow_loopback=args.allow_loopback)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        result = {"status": "FAIL", "error": str(exc),
-                  "action": "Inspect the selected release schema and configuration; no files were changed"}
-    print(json.dumps(result, indent=2))
-    return 0 if result["status"] == "PASS" else 1
+            path = args.repo / "config" / name
+            try:
+                size = path.stat().st_size
+            except FileNotFoundError:
+                size = None
+            if size is None:
+                print("FAIL [config] required core YAML file missing")
+                return 1
+            if size > 1_000_000:
+                print("UNKNOWN [config] configuration exceeds bounded parser scope")
+                return 2
+            with path.open() as stream:
+                documents.append(yaml.load(stream, Loader=UniqueLoader))
+        check_config(*documents, allow_loopback=True)
+    except PermissionError:
+        print("UNKNOWN [config] permission denied")
+        return 2
+    except (UnsupportedSchema, KeyError, TypeError, AttributeError):
+        print("UNKNOWN [config] unsupported/incomplete schema; inspect selected version")
+        return 2
+    except (ValueError, yaml.YAMLError):
+        # Exceptions can contain config values; do not disclose them.
+        print("FAIL [config] invalid YAML or proven static configuration mismatch; inspect privately")
+        return 1
+    except OSError:
+        print("UNKNOWN [config] files not observable")
+        return 2
+    print("PASS [config] common single-UPF static consistency; runtime/NSSF/subscriber not checked")
+    return 0
 
 
 if __name__ == "__main__":
