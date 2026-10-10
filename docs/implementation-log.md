@@ -24,3 +24,14 @@ Each stage is recorded in a local Conventional Commit. No remote publication is 
   agent-specific metadata and obsolete tests; read-only replacements follow.
 - Every source download was read-only; no upstream installer/Makefile executed.
 - Git identity was supplied by the user and set only in this repository.
+
+## 3. Read-only diagnostics
+
+- Added Bash CLIs with quoted paths, stable classifications, explicit exit codes,
+  bounded commands and no sudo/network/service/installer mutations.
+- Added shared CLI support, inert version-scoped Makefile artifact inspection and
+  adapted the previous useful YAML checker for sanitized FAIL/UNKNOWN reporting.
+- Missing parser dependency, unsupported schemas, denied observation, inactive
+  service and unloaded module cannot become deployment success.
+- Initial Bash syntax validation passed. Fixture/static/real read-only validation
+  and the public README are the next stage.
